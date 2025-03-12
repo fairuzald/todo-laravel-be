@@ -29,8 +29,6 @@ trait ApiResponse
         'per_page' => $data->perPage(),
         'current_page' => $data->currentPage(),
         'last_page' => $data->lastPage(),
-        'from' => $data->firstItem(),
-        'to' => $data->lastItem(),
       ];
     } elseif ($data !== null) {
       $response['data'] = $data;

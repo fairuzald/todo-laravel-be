@@ -64,10 +64,20 @@ class Handler extends ExceptionHandler
         }
 
         if ($exception instanceof ModelNotFoundException) {
-            return $this->notFoundResponse('Resource not found');
+            $modelName = strtolower(class_basename($exception->getModel()));
+            return $this->notFoundResponse("{$modelName} not found");
         }
 
         if ($exception instanceof NotFoundHttpException) {
+            // Extract model name from message if it's a converted ModelNotFoundException
+            if (strpos($exception->getMessage(), 'No query results for model') !== false) {
+                preg_match('/\[(.*?)\]/', $exception->getMessage(), $matches);
+                if (isset($matches[1])) {
+                    $modelName = strtolower(class_basename($matches[1]));
+                    return $this->notFoundResponse("{$modelName} not found");
+                }
+            }
+
             return $this->notFoundResponse('The requested URL was not found');
         }
 

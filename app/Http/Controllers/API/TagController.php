@@ -9,6 +9,7 @@ use App\Http\Resources\TagCollection;
 use App\Http\Resources\TagResource;
 use App\Models\Tag;
 use App\Traits\ApiResponse;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -61,7 +62,7 @@ class TagController extends Controller
      *          @OA\JsonContent(
      *              @OA\Property(property="success", type="boolean", example=true),
      *              @OA\Property(property="message", type="string", example="Tags retrieved successfully"),
-     *              @OA\Property(
+     **              @OA\Property(
      *                  property="data",
      *                  type="array",
      *                  @OA\Items(ref="#/components/schemas/Tag")
@@ -100,7 +101,7 @@ class TagController extends Controller
         $tagsPaginated = $tags->latest()->paginate($perPage);
 
         return $this->successResponse(
-            new TagCollection($tagsPaginated),
+            $tagsPaginated,
             'Tags retrieved successfully'
         );
     }
@@ -225,12 +226,15 @@ class TagController extends Controller
      */
     public function show(Request $request, $id): JsonResponse
     {
-        $tag = $request->user()->tags()->findOrFail($id);
-
-        return $this->successResponse(
-            new TagResource($tag),
-            'Tag retrieved successfully'
-        );
+        try {
+            $tag = $request->user()->tags()->findOrFail($id);
+            return $this->successResponse(
+                new TagResource($tag),
+                'Tag retrieved successfully'
+            );
+        } catch (ModelNotFoundException $e) {
+            return $this->notFoundResponse('Tag not found');
+        }
     }
 
     /**
@@ -311,13 +315,17 @@ class TagController extends Controller
      */
     public function update(UpdateTagRequest $request, $id): JsonResponse
     {
-        $tag = $request->user()->tags()->findOrFail($id);
-        $tag->update($request->validated());
+        try {
+            $tag = $request->user()->tags()->findOrFail($id);
+            $tag->update($request->validated());
 
-        return $this->successResponse(
-            new TagResource($tag),
-            'Tag updated successfully'
-        );
+            return $this->successResponse(
+                new TagResource($tag),
+                'Tag updated successfully'
+            );
+        } catch (ModelNotFoundException $e) {
+            return $this->notFoundResponse('Tag not found');
+        }
     }
 
     /**
@@ -377,18 +385,22 @@ class TagController extends Controller
      */
     public function destroy(Request $request, $id): JsonResponse
     {
-        $tag = $request->user()->tags()->findOrFail($id);
+        try {
+            $tag = $request->user()->tags()->findOrFail($id);
 
-        // Check if tag is associated with any tasks
-        if ($tag->tasks()->count() > 0) {
-            return $this->errorResponse(
-                'Cannot delete this tag because it is associated with one or more tasks',
-                409
-            );
+            // Check if tag is associated with any tasks
+            if ($tag->tasks()->count() > 0) {
+                return $this->errorResponse(
+                    'Cannot delete this tag because it is associated with one or more tasks',
+                    409
+                );
+            }
+
+            $tag->delete();
+
+            return $this->noContentResponse();
+        } catch (ModelNotFoundException $e) {
+            return $this->notFoundResponse('Tag not found');
         }
-
-        $tag->delete();
-
-        return $this->noContentResponse();
     }
 }

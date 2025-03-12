@@ -9,6 +9,7 @@ use App\Http\Resources\TaskCollection;
 use App\Http\Resources\TaskResource;
 use App\Models\Task;
 use App\Traits\ApiResponse;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -184,7 +185,7 @@ class TaskController extends Controller
         $tasksPaginated = $tasks->latest()->paginate($perPage);
 
         return $this->successResponse(
-            new TaskCollection($tasksPaginated),
+            $tasksPaginated,
             'Tasks retrieved successfully'
         );
     }
@@ -319,12 +320,15 @@ class TaskController extends Controller
      */
     public function show(Request $request, $id): JsonResponse
     {
-        $task = $request->user()->tasks()->with('tags')->findOrFail($id);
-
-        return $this->successResponse(
-            new TaskResource($task),
-            'Task retrieved successfully'
-        );
+        try {
+            $task = $request->user()->tasks()->with('tags')->findOrFail($id);
+            return $this->successResponse(
+                new TaskResource($task),
+                'Task retrieved successfully'
+            );
+        } catch (ModelNotFoundException $e) {
+            return $this->notFoundResponse('Task not found');
+        }
     }
 
     /**
@@ -409,19 +413,23 @@ class TaskController extends Controller
      */
     public function update(UpdateTaskRequest $request, $id): JsonResponse
     {
-        $task = $request->user()->tasks()->findOrFail($id);
-        $task->update($request->validated());
+        try {
+            $task = $request->user()->tasks()->findOrFail($id);
+            $task->update($request->validated());
 
-        if ($request->has('tag_ids')) {
-            $task->tags()->sync($request->tag_ids);
+            if ($request->has('tag_ids')) {
+                $task->tags()->sync($request->tag_ids);
+            }
+
+            $task->load('tags');
+
+            return $this->successResponse(
+                new TaskResource($task),
+                'Task updated successfully'
+            );
+        } catch (ModelNotFoundException $e) {
+            return $this->notFoundResponse('Task not found');
         }
-
-        $task->load('tags');
-
-        return $this->successResponse(
-            new TaskResource($task),
-            'Task updated successfully'
-        );
     }
 
     /**
@@ -473,10 +481,14 @@ class TaskController extends Controller
      */
     public function destroy(Request $request, $id): JsonResponse
     {
-        $task = $request->user()->tasks()->findOrFail($id);
-        $task->tags()->detach();
-        $task->delete();
+        try {
+            $task = $request->user()->tasks()->findOrFail($id);
+            $task->tags()->detach();
+            $task->delete();
 
-        return $this->noContentResponse();
+            return $this->noContentResponse();
+        } catch (ModelNotFoundException $e) {
+            return $this->notFoundResponse('Task not found');
+        }
     }
 }

@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+    # PHP Service
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: todo-app
+        restart: unless-stopped
+        working_dir: /var/www/html
+        volumes:
+            - ./:/var/www/html:delegated
+            - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+        networks:
+            - todo-network
+        env_file:
+            - .env
+
+    # Nginx Service
+    webserver:
+        image: nginx:alpine
+        container_name: todo-webserver
+        restart: unless-stopped
+        ports:
+            - "8000:80"
+        volumes:
+            - ./:/var/www/html:delegated
+            - ./docker/nginx/conf.d:/etc/nginx/conf.d
+        networks:
+            - todo-network
+        depends_on:
+            - app
+
+networks:
+    todo-network:
+        driver: bridge

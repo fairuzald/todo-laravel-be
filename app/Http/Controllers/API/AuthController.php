@@ -129,7 +129,6 @@ class AuthController extends Controller
      *              @OA\Property(
      *                  property="data",
      *                  type="object",
-     *                  @OA\Property(property="token", type="string", example="1|laravel_sanctum_token..."),
      *                  @OA\Property(property="user", type="object", ref="#/components/schemas/User")
      *              )
      *          )
@@ -164,12 +163,16 @@ class AuthController extends Controller
             return $this->forbiddenResponse('Email not verified. Please check your email for verification link.');
         }
 
+        // Create token but don't return it - store in cookie instead
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return $this->successResponse([
-            'token' => $token,
-            'user' => new UserResource($user),
-        ], 'Login successful');
+        // Set the token in a secure HTTP-only cookie
+        $cookie = cookie('auth_token', $token, 60 * 24 * 30, null, null, config('app.env') === 'production', true, false, 'strict'); // 30 days
+
+        return $this->successResponse(
+            new UserResource($user),
+            'Login successful'
+        )->withCookie($cookie);
     }
 
     /**
@@ -202,7 +205,11 @@ class AuthController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
 
-        return $this->successResponse(null, 'Logged out successfully');
+        // Clear the cookie
+        $cookie = cookie()->forget('auth_token');
+
+        return $this->successResponse(null, 'Logged out successfully')
+            ->withCookie($cookie);
     }
 
     /**
@@ -250,7 +257,7 @@ class AuthController extends Controller
      *      operationId="verifyEmail",
      *      tags={"Auth"},
      *      summary="Verify email address",
-     *      description="Verify user email address",
+     *      description="Verify user email address via direct link",
      *      @OA\Parameter(
      *          name="id",
      *          in="path",
@@ -266,29 +273,57 @@ class AuthController extends Controller
      *          @OA\Schema(type="string")
      *      ),
      *      @OA\Response(
-     *          response=200,
-     *          description="Email verified successfully",
-     *          @OA\JsonContent(
-     *              @OA\Property(property="success", type="boolean", example=true),
-     *              @OA\Property(property="message", type="string", example="Email verified successfully")
-     *          )
-     *      ),
-     *      @OA\Response(
-     *          response=400,
-     *          description="Invalid verification link",
-     *          @OA\JsonContent(
-     *              @OA\Property(property="success", type="boolean", example=false),
-     *              @OA\Property(property="message", type="string", example="Invalid verification link")
-     *          )
+     *          response=302,
+     *          description="Redirects to frontend with status"
      *      )
      * )
      */
-    public function verifyEmail(Request $request, $id, $hash): JsonResponse
+    public function verifyEmail(Request $request, $id, $hash)
     {
-        $user = User::findOrFail((int) $id);
+        $user = User::findOrFail((int)$id);
 
         if (!hash_equals((string) $hash, sha1($user->getEmailForVerification()))) {
-            return $this->errorResponse('Invalid verification link');
+            return redirect(config('app.frontend_url') . '/email-verified?status=invalid');
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return redirect(config('app.frontend_url') . '/email-verified?status=already-verified');
+        }
+
+        if ($user->markEmailAsVerified()) {
+            event(new Verified($user));
+        }
+
+        return redirect(config('app.frontend_url') . '/email-verified?status=success');
+    }
+
+    /**
+     * @OA\Post(
+     *    path="/email/verify",
+     *    operationId="verifyEmailFrom Request",
+     *    tags={"Auth"},
+     *    summary="Verify email address",
+     *    description="Verify user email address",
+     *    @OA\RequestBody(
+     *        required=true,
+     *        @OA\JsonContent(
+     *            required={"id", "hash"},
+     *            @OA\Property(property="id", type="integer"),
+     *            @OA\Property(property="hash", type="string")
+     *        )
+     *    ),
+     *    @OA\Response(
+     *        response=200,
+     *        description="Email verified successfully"
+     *    )
+     * )
+     */
+    public function verifyEmailFromRequest(Request $request): JsonResponse
+    {
+        $user = User::findOrFail((int)($request->id));
+
+        if (!hash_equals((string) $request->hash, sha1($user->getEmailForVerification()))) {
+            return $this->errorResponse('Invalid verification link', 400);
         }
 
         if ($user->hasVerifiedEmail()) {
@@ -401,46 +436,6 @@ class AuthController extends Controller
         return $this->errorResponse(__($status), 400);
     }
 
-    /**
-     * @OA\Post(
-     *      path="/api/auth/reset-password",
-     *      operationId="resetPassword",
-     *      tags={"Auth"},
-     *      summary="Reset password",
-     *      description="Reset the user's password",
-     *      @OA\RequestBody(
-     *          required=true,
-     *          @OA\JsonContent(
-     *              required={"token", "email", "password", "password_confirmation"},
-     *              @OA\Property(property="token", type="string", example="token-from-email"),
-     *              @OA\Property(property="email", type="string", format="email", example="user@example.com"),
-     *              @OA\Property(property="password", type="string", format="password", example="newpassword123"),
-     *              @OA\Property(property="password_confirmation", type="string", format="password", example="newpassword123")
-     *          )
-     *      ),
-     *      @OA\Response(
-     *          response=200,
-     *          description="Password reset successfully",
-     *          @OA\JsonContent(
-     *              @OA\Property(property="success", type="boolean", example=true),
-     *              @OA\Property(property="message", type="string", example="Password has been reset successfully")
-     *          )
-     *      ),
-     *      @OA\Response(
-     *          response=422,
-     *          description="Validation error",
-     *          @OA\JsonContent(
-     *              @OA\Property(property="success", type="boolean", example=false),
-     *              @OA\Property(property="message", type="string", example="Validation errors"),
-     *              @OA\Property(
-     *                  property="errors",
-     *                  type="object",
-     *                  example={"email": {"The email field is required."}}
-     *              )
-     *          )
-     *      )
-     * )
-     */
     /**
      * @OA\Post(
      *      path="/api/auth/reset-password",

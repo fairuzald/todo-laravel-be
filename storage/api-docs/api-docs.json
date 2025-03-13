@@ -166,10 +166,6 @@
                                         },
                                         "data": {
                                             "properties": {
-                                                "token": {
-                                                    "type": "string",
-                                                    "example": "1|laravel_sanctum_token..."
-                                                },
                                                 "user": {
                                                     "$ref": "#/components/schemas/User"
                                                 }
@@ -348,7 +344,7 @@
                     "Auth"
                 ],
                 "summary": "Verify email address",
-                "description": "Verify user email address",
+                "description": "Verify user email address via direct link",
                 "operationId": "verifyEmail",
                 "parameters": [
                     {
@@ -371,45 +367,45 @@
                     }
                 ],
                 "responses": {
+                    "302": {
+                        "description": "Redirects to frontend with status"
+                    }
+                }
+            }
+        },
+        "/email/verify": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Verify email address",
+                "description": "Verify user email address",
+                "operationId": "verifyEmailFrom Request",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "id",
+                                    "hash"
+                                ],
+                                "properties": {
+                                    "id": {
+                                        "type": "integer"
+                                    },
+                                    "hash": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
                     "200": {
-                        "description": "Email verified successfully",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Email verified successfully"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid verification link",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean",
-                                            "example": false
-                                        },
-                                        "message": {
-                                            "type": "string",
-                                            "example": "Invalid verification link"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
+                        "description": "Email verified successfully"
                     }
                 }
             }

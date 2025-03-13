@@ -17,13 +17,14 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-RUN useradd -G www-data,root -u 1000 -d /home/devuser devuser
-RUN mkdir -p /home/devuser/.composer && \
+RUN useradd -G www-data,root -u 1000 -d /home/devuser devuser && \
+  mkdir -p /home/devuser/.composer && \
   chown -R devuser:devuser /home/devuser
 
 RUN mkdir -p /var/www/html/storage /var/www/html/bootstrap/cache && \
   chown -R www-data:www-data /var/www/html && \
   chmod -R 775 /var/www/html
+
 
 COPY --chown=devuser:devuser composer.json composer.lock ./
 
@@ -44,21 +45,25 @@ RUN echo '#!/bin/sh\n\
   \n\
   chown -R www-data:www-data /var/www/html/storage\n\
   chown -R www-data:www-data /var/www/html/bootstrap/cache\n\
-  chmod -R 775 /var/www/html/storage\n\
-  chmod -R 775 /var/www/html/bootstrap/cache\n\
+  chmod -R 777 /var/www/html/storage\n\
+  chmod -R 777 /var/www/html/bootstrap/cache\n\
   \n\
   php artisan config:clear\n\
   php artisan view:clear\n\
   php artisan route:clear\n\
   php artisan cache:clear\n\
   \n\
+  if [ "$L5_SWAGGER_GENERATE_ALWAYS" = "true" ]; then\n\
   mkdir -p /var/www/html/storage/api-docs\n\
-  chmod -R 775 /var/www/html/storage/api-docs\n\
+  chmod -R 777 /var/www/html/storage/api-docs\n\
   php artisan l5-swagger:generate\n\
+  fi\n\
   \n\
-  exec php-fpm\n\
-  ' > /usr/local/bin/entrypoint.sh && \
-  chmod +x /usr/local/bin/entrypoint.sh
+  exec php-fpm -F\n\
+  ' > /usr/local/bin/entrypoint.sh
+
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 9000
+
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
